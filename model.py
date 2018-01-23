@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+#test
+from torch.autograd.variable import Variable
+
 """
 The architecture of f consists of four convolutional layers with 64, 128, 256, 128 filters respectively,
 each followed by max pooling and ReLU non-linearity.
@@ -22,7 +26,7 @@ class _f(nn.Module):
         self.conv3 = nn.Conv2d(128, 256, 3, padding=1)
         self.conv4 = nn.Conv2d(256, 128, 3, padding=1)
         self.final_pool = nn.MaxPool2d(4)
-        self.fc1 = nn.Linear(128, 10)
+        self.conv5 = nn.Conv2d(128, 10, 1, 1)
 
     def forward(self, input):
         if(input.shape[1] == 1):
@@ -33,9 +37,7 @@ class _f(nn.Module):
         x = F.relu(self.final_pool(self.conv4(x)))
 
         if self.mode == 'pretrain':
-            x = x.view(-1, 128)
-            x = F.relu(self.fc1(x))
-
+            x = self.conv5(x)
         return x
 
 """

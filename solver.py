@@ -7,15 +7,16 @@ from data_loader import data_loader
 import torch.cuda
 from torch.autograd import Variable
 import torchvision.utils as vutils
+import os
 
 class Solver(object):
 
-    def __init__(self, mode):
-        self.mode = mode
+    def __init__(self, config):
+        self.mode = config.mode
 
         #parameters
-        self.epochs = 1000
-        self.batchsize = 32
+        self.epochs = config.epochs
+        self.batchsize = config.batchsize
 
         #build model
         self.build_model()
@@ -101,22 +102,24 @@ class Solver(object):
 
                 D_real = self.D(mnist_image_v)
                 loss_D_real = self.CEL_criterion(D_real, Variable(torch.FloatTensor(self.batchsize).fill_(real_target_label).long()).cuda())
-                loss_D_real.backward()
+                #loss_D_real.backward()
 
                 f_real = self.f(mnist_image_v)
                 g_f_real = self.g(f_real)
                 new_g_f_real = g_f_real.detach()
                 D_g_f_real = self.D(new_g_f_real)
                 loss_D_g_f_real = self.CEL_criterion(D_g_f_real, Variable(torch.FloatTensor(self.batchsize).fill_(fake_target_label).long().cuda()))
-                loss_D_g_f_real.backward()
+                #loss_D_g_f_real.backward()
 
                 f_svhn = self.f(svhn_image_v)
                 g_f_svhn = self.g(f_svhn)
                 new_g_f_svhn = g_f_svhn.detach()
                 D_g_f_svhn = self.D(new_g_f_svhn)
                 loss_D_g_f_svhn = self.CEL_criterion(D_g_f_svhn, Variable(torch.FloatTensor(self.batchsize).fill_(fake_source_label).long().cuda()))
+                #loss_D_g_f_svhn.backward()
 
                 D_loss = loss_D_g_f_svhn + loss_D_g_f_real + loss_D_real
+                D_loss.backward()
                 self.D_optimizer.step()
 
                 #Train G
@@ -126,21 +129,23 @@ class Solver(object):
 
                 f_g_f_svhn = self.f(g_f_svhn)
                 l_cosnt = self.MSL_criterion(f_svhn, f_g_f_svhn.detach()) * 15
-                l_cosnt.backward()
+                #l_cosnt.backward()
 
                 l_tid = self.MSL_criterion(g_f_real, mnist_image_v) * 15
-                l_tid.backward()
+                #l_tid.backward()
 
                 new_g_f_real = g_f_real.detach()
                 new_D_g_f_real = self.D(new_g_f_real)
                 loss_new_g_f_real = self.CEL_criterion(new_D_g_f_real, Variable(torch.FloatTensor(self.batchsize).fill_(real_target_label).long().cuda()))
-                loss_new_g_f_real.backward()
+                #loss_new_g_f_real.backward()
+
                 new_g_f_svhn = g_f_svhn.detach()
                 new_D_g_f_svhn = self.D(new_g_f_svhn)
                 loss_new_g_f_svhn = self.CEL_criterion(new_D_g_f_svhn, Variable(torch.FloatTensor(self.batchsize).fill_(real_target_label).long().cuda()))
-                loss_new_g_f_svhn.backward()
+                #loss_new_g_f_svhn.backward()
 
                 G_loss = loss_new_g_f_svhn + loss_new_g_f_real + l_tid + l_cosnt
+                G_loss.backward()
                 self.g_optimizer.step()
 
                 # print statistics
@@ -148,15 +153,10 @@ class Solver(object):
                     print('[%d, %5d] G_loss: %.3f D_loss: %.3f' %
                           (epoch + 1, i + 1, G_loss, D_loss))
 
-                # save sample
-                if i % 1000 == 0:
-                    vutils.save_image(sample_svhn_v.data,
-                                      './sample/real_sample.png',
-                                      normalize=True)
-                    svhn_to_mnist = self.g(self.f(sample_svhn_v))
-                    vutils.save_image(svhn_to_mnist.data,
-                                      './sample/fake_sample%d_%d.png' % (epoch, i),
-                                      normalize=True)
+            vutils.save_image(sample_svhn_v.data, './sample/real_sample.png', normalize=True)
+            svhn_to_mnist = self.g(self.f(sample_svhn_v))
+            vutils.save_image(svhn_to_mnist.data, './sample/fake_sample%d_%d.png' % (epoch, i), normalize=True)
+
     def pretrain(self):
         for epoch in range(self.epochs):
             running_loss = 0.0
@@ -170,7 +170,7 @@ class Solver(object):
                 self.f.zero_grad()
 
                 output = self.f(image_v)
-                loss = self.criterion(output, label_v)
+                loss = self.criterion(output.squeeze(3).squeeze(2), label_v)
 
                 loss.backward()
                 self.f_optimizer.step()
@@ -199,4 +199,6 @@ class Solver(object):
         print('Accuracy of the network on the 10000 test images: %d %%' % (
                 100 * correct / total))
 
+        if not os.path.exists('./pretrain'):
+            os.mkdir('./pretrain')
         torch.save(self.f.state_dict(), './pretrain/checkpoint.pth')
